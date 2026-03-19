@@ -8,7 +8,7 @@ game = rom.game
 modutil = mods['SGG_Modding-ModUtil']
 chalk = mods['SGG_Modding-Chalk']
 reload = mods['SGG_Modding-ReLoad']
-local lib = mods['adamant-Modpack_Lib'].public
+local lib = mods['adamant-Modpack_Lib']
 
 config = chalk.auto('config.lua')
 public.config = config
@@ -59,6 +59,126 @@ public.definition = {
 -- MODULE LOGIC
 -- =============================================================================
 
+local function PatchGloriousDisaster()
+    if TraitData == nil or TraitData.ApolloSecondStageCastBoon == nil then return end
+
+    local extraManaCost = 30
+    local baseWait = 0.8
+    local baseCost = 15
+
+    TraitData.ApolloSecondStageCastBoon.ReportedDifference = extraManaCost
+    TraitData.ApolloSecondStageCastBoon.WeaponDataOverrideTraitRequirement = "ApolloExCastBoon"
+    TraitData.ApolloSecondStageCastBoon.ChargeStageModifiers = nil
+
+    TraitData.ApolloSecondStageCastBoon.WeaponDataOverride = {
+        WeaponCastArm = {
+            ManaCost = 0,
+            OnChargeFunctionNames = { "DoWeaponCharge" },
+            ChargeWeaponData = {
+                OnStageReachedFunctionName = "CastChargeStage",
+                EmptyChargeFunctionName = "EmptyCastCharge",
+                OnNoManaForceRelease = "NoManaCastSecondStageForceRelease"
+            },
+            ChargeWeaponStages = {
+                { ManaCost = baseCost + extraManaCost, Wait = baseWait },
+                { RequiredTraitName = "ApolloExCastBoon", ManaCost = baseCost + extraManaCost, Wait = 0, ForceRelease = true, ResetIndicator = true }
+            }
+        },
+        WeaponCast = {
+            ChargeWeaponStages = {
+                { ManaCost = baseCost + extraManaCost, Wait = baseWait, ChannelSlowEventOnStart = true },
+                { RequiredTraitName = "ApolloExCastBoon", ManaCost = baseCost + extraManaCost, Wait = 0, ForceRelease = true, ResetIndicator = true, SuperCharge = true }
+            }
+        },
+        WeaponCastProjectileHades = {
+            ChargeWeaponStages = {
+                { ManaCost = baseCost + extraManaCost, Wait = baseWait, ChannelSlowEventOnStart = true },
+                { RequiredTraitName = "ApolloExCastBoon", ManaCost = baseCost + extraManaCost, Wait = 0, ForceRelease = true, ResetIndicator = true, SuperCharge = true }
+            }
+        },
+        WeaponAnywhereCast = {
+            ChargeWeaponStages = {
+                { ManaCost = baseCost + extraManaCost, Wait = baseWait, ChannelSlowEventOnStart = true },
+                { RequiredTraitName = "ApolloExCastBoon", ManaCost = baseCost + extraManaCost, Wait = 0, ForceRelease = true, ResetIndicator = true, SuperCharge = true }
+            }
+        },
+        WeaponCastProjectile = {
+            ChargeWeaponStages = {
+                { ManaCost = baseCost + extraManaCost, Wait = baseWait, ChannelSlowEventOnStart = true },
+                { RequiredTraitName = "ApolloExCastBoon", ManaCost = baseCost + extraManaCost, Wait = 0, ForceRelease = true, ResetIndicator = true, SuperCharge = true }
+            }
+        },
+        WeaponCastLob = {
+            ChargeWeaponStages = {
+                { ManaCost = baseCost + extraManaCost, Wait = baseWait, ChannelSlowEventOnStart = true },
+                { RequiredTraitName = "ApolloExCastBoon", ManaCost = baseCost + extraManaCost, Wait = 0, ForceRelease = true, ResetIndicator = true, SuperCharge = true }
+            }
+        }
+    }
+
+    TraitData.ApolloSecondStageCastBoon.PropertyChanges = TraitData.ApolloSecondStageCastBoon.PropertyChanges or {}
+    local propertyList = TraitData.ApolloSecondStageCastBoon.PropertyChanges
+
+    local forceRelease = {
+        TraitName = "ApolloExCastBoon",
+        WeaponName = "WeaponCastArm",
+        WeaponProperty = "ForceMaxChargeRelease",
+        ChangeValue = false,
+    }
+    local chargeTime = {
+        TraitName = "ApolloExCastBoon",
+        WeaponName = "WeaponCastArm",
+        WeaponProperty = "ChargeTime",
+        ChangeValue = baseWait,
+    }
+
+    if not ListContainsEquivalent(propertyList, forceRelease) then
+        table.insert(propertyList, forceRelease)
+    end
+    if not ListContainsEquivalent(propertyList, chargeTime) then
+        table.insert(propertyList, chargeTime)
+    end
+end
+
+local function ReplaceGigaMoonburst()
+    OverwriteTableKeys(TraitData, {
+        StaffSecondStageTrait = {
+            InheritFrom = { "WeaponTrait", "StaffHammerTrait" },
+            Icon = "Hammer_Staff_37",
+            GameStateRequirements = {
+                { Path = { "CurrentRun", "Hero", "Weapons" }, HasAll = { "WeaponStaffSwing" } },
+            },
+            RarityLevels = {
+                Common = { Multiplier = 1.0 },
+                Legendary = { Multiplier = 1.333 },
+            },
+            ManaCostModifiers = {
+                WeaponNames = { "WeaponStaffBall" },
+                ExcludeLinked = true,
+                ExWeapons = true,
+                ManaCostAdd = 30,
+                ReportValues = { ReportedManaCost = "ManaCostAdd" }
+            },
+            AddOutgoingDamageModifiers = {
+                ValidProjectiles = { "ProjectileStaffBallCharged" },
+                ValidWeaponMultiplier = { BaseValue = 4.0, SourceIsMultiplier = true },
+                ReportValues = { ReportedWeaponMultiplier = "ValidWeaponMultiplier" },
+            },
+            PropertyChanges = {
+                {
+                    WeaponName = "WeaponStaffBall",
+                    ProjectileName = "ProjectileStaffBallCharged",
+                    ProjectileProperties = { DamageRadius = 550, BlastSpeed = 2500 },
+                },
+            },
+            ExtractValues = {
+                { Key = "ReportedManaCost", ExtractAs = "ManaCost" },
+                { Key = "ReportedWeaponMultiplier", ExtractAs = "DamageIncrease", Format = "PercentDelta" },
+            }
+        }
+    })
+end
+
 local function apply()
     backup(TraitData, "ApolloSecondStageCastBoon")
     backup(TraitData, "StaffSecondStageTrait")
@@ -68,7 +188,7 @@ end
 
 local function registerHooks()
     modutil.mod.Path.Wrap("CheckAxeCastArm", function(baseFunc, triggerArgs, args)
-        if not config.Enabled then return baseFunc(triggerArgs, args) end
+        if not lib.isEnabled(config) then return baseFunc(triggerArgs, args) end
         if HeroHasTrait("ApolloExCastBoon") and HeroHasTrait("ApolloSecondStageCastBoon") then
             SessionMapState.SuperchargeCast = true
         end
@@ -89,11 +209,12 @@ modutil.once_loaded.game(function()
     loader.load(function()
         import_as_fallback(rom.game)
         registerHooks()
-        if config.Enabled then apply() end
-        if public.definition.dataMutation and not mods['adamant-Core'] then
+        if lib.isEnabled(config) then apply() end
+        if public.definition.dataMutation and not mods['adamant-Modpack_Core'] then
             SetupRunData()
         end
     end)
 end)
 
-lib.standaloneUI(public.definition, config, apply, restore)
+local uiCallback = lib.standaloneUI(public.definition, config, apply, restore)
+rom.gui.add_to_menu_bar(uiCallback)
